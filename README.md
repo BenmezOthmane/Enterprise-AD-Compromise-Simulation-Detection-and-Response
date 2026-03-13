@@ -147,13 +147,13 @@ These will be validated and documented after each attack simulation:
 
 ## Project Status
 
-- [ ] Lab environment setup & network segmentation
-- [ ] Wazuh deployment and agent configuration
-- [ ] Sysmon deployment on Windows machines
-- [ ] Phase 1 — LLMNR Poisoning simulation + detection rule
-- [ ] Phase 2 — Kerberoasting simulation + detection rule
-- [ ] Phase 3 — Pass-the-Hash simulation + detection rule
-- [ ] Phase 4 — Privilege Escalation simulation + detection rule
+- [x] Lab environment setup & network segmentation
+- [x] Wazuh deployment and agent configuration
+- [x] Sysmon deployment on Windows machines
+- [x] Phase 1 — LLMNR Poisoning simulation + detection rule
+- [x] Phase 2 — Kerberoasting simulation + detection rule
+- [x] Phase 3 — Pass-the-Hash simulation + detection rule
+- [x] Phase 4 — Privilege Escalation simulation + detection rule
 - [ ] Azure Entra ID integration
 - [ ] Automated offsite backup pipeline
 - [ ] Full compromise report
