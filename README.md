@@ -196,7 +196,7 @@ Every attack is mapped to **MITRE ATT&CK**, detected via **custom Wazuh rules**,
 - [x] PCAP Samples x4
 - [x] Architecture + Attack-Flow diagrams
 - [x] Backup Pipeline
-- [ ] Azure Sentinel Integration ← Coming Soon
+- [x] Azure Sentinel Integration ← Coming Soon
 
 ---
 
